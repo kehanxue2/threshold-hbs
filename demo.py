@@ -1,4 +1,4 @@
-from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme, BatchedThresholdHBSScheme, HierarchicalBatchedThresholdHBSScheme
+from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme, BatchedThresholdHBSScheme, HierarchicalBatchedThresholdHBSScheme, WinternitzThresholdHBSScheme
 
 def main():
     mini_scheme = ThresholdHBSScheme(parties=4, tree_height=3)
@@ -69,6 +69,22 @@ def main():
     print("Subtree index:", ext_batch_result["subtree_index"])
     print("Used leaf indices:", ext_batch_result["used_leaf_indices"])
     print("Verification results:", ext_scheme4.verify_subtree_batch(ext_batch_result))
+    print()
+
+    ext_scheme5 = WinternitzThresholdHBSScheme(parties=4, threshold_k=3, tree_height=3, w=16,)
+    ext_message5 = b"extension 5 winternitz threshold demo"
+    ext_signature5 = ext_scheme5.sign(ext_message5, active_party_ids=[0, 1, 2])
+
+    print("-- Demo: Extension 5 (Winternitz Threshold HBS) --")
+    print("Parties:", ext_scheme5.parties)
+    print("Threshold k:", ext_scheme5.threshold_k)
+    print("Winternitz w:", ext_scheme5.w)
+    print("Number of chains:", ext_scheme5.num_chains)
+    print("Merkle root:", ext_scheme5.public_bundle.merkle_root.hex())
+    print("Max signatures:", ext_scheme5.public_bundle.max_signatures)
+    print("Leaf index used:", ext_signature5.leaf_index)
+    print("Revealed elements:", len(ext_signature5.revealed))
+    print("Verification result:", ext_scheme5.verify(ext_signature5))
 
 if __name__ == "__main__":
     main()

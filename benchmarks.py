@@ -1,4 +1,4 @@
-from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme, BatchedThresholdHBSScheme, HierarchicalBatchedThresholdHBSScheme
+from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme, BatchedThresholdHBSScheme, HierarchicalBatchedThresholdHBSScheme, WinternitzThresholdHBSScheme
 
 def main():
     print("-- Benchmark: Minimal Threshold HBS --")
@@ -13,7 +13,7 @@ def main():
     print()
     print("-- Benchmark: Extension 1 k-of-n Threshold HBS --")
 
-    ext_settings1 = [(4, 3, 3), (5, 3, 3), (5, 4, 2),]
+    ext_settings1 = [(4, 3, 3), (5, 3, 3), (5, 4, 2), (6, 3, 3), (6, 4, 3),]
 
     for parties, threshold_k, tree_height in ext_settings1:
         scheme = KOfNThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height)
@@ -23,7 +23,7 @@ def main():
     print()
     print("-- Benchmark: Extension 2 Distributed Threshold HBS --")
 
-    ext_settings2 = [(4, 3, 3), (5, 3, 3), (5, 4, 2),]
+    ext_settings2 = [(4, 3, 3), (5, 3, 3), (5, 4, 2), (6, 3, 3), (6, 4, 3),]
 
     for parties, threshold_k, tree_height in ext_settings2:
         scheme = DistributedThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height)
@@ -33,7 +33,7 @@ def main():
     print()
     print("-- Benchmark: Extension 3 Batched Threshold HBS --")
 
-    ext_settings3 = [(4, 3, 4, 3), (5, 3, 4, 3), (5, 4, 4, 4),]
+    ext_settings3 = [(4, 3, 4, 2), (4, 3, 4, 3), (5, 3, 4, 3), (5, 4, 4, 4), (6, 4, 4, 5),]
 
     for parties, threshold_k, tree_height, batch_size in ext_settings3:
         scheme = BatchedThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height)
@@ -43,11 +43,21 @@ def main():
     print()
     print("-- Benchmark: Extension 4 Hierarchical Batched Threshold HBS --")
 
-    ext_settings4 = [(4, 3, 4, 2, 3), (5, 3, 4, 2, 3), (5, 4, 4, 2, 4),]
+    ext_settings4 = [(4, 3, 4, 2, 2), (4, 3, 4, 2, 3), (5, 3, 4, 2, 3), (5, 4, 4, 2, 4), (6, 4, 4, 3, 5),]
 
     for parties, threshold_k, tree_height, subtree_height, batch_size in ext_settings4:
         scheme = HierarchicalBatchedThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height, subtree_height=subtree_height)
         result = scheme.benchmark_hierarchical_batch(rounds=5, batch_size=batch_size)
+        print(result)
+
+    print()
+    print("-- Benchmark: Extension 5 Winternitz Threshold HBS --")
+
+    ext_settings5 = [(4, 3, 3, 4), (4, 3, 3, 8), (4, 3, 3, 16), (5, 3, 3, 16), (5, 4, 3, 32),]
+
+    for parties, threshold_k, tree_height, w in ext_settings5:
+        scheme = WinternitzThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height, w=w)
+        result = scheme.benchmark(rounds=5)
         print(result)
 
 if __name__ == "__main__":

@@ -1072,6 +1072,305 @@ class HierarchicalBatchedThresholdHBSScheme(BatchedThresholdHBSScheme):
             "verify_time": round(statistics.mean(verify_times), 8),
             "avg_sign_time_per_message": round(statistics.mean(batch_sign_times) / batch_size, 8),
         }
+    
+# Extension 5: Winternitz-based threshold hash signatures
+class WinternitzPublicKey:
+    def __init__(self, pub):
+        self.pub = pub
+
+    def leaf_hash(self, scheme):
+        flat = []
+        for item in self.pub:
+            flat.append(item)
+        return scheme.h_tag(b"winternitz-leaf", *flat)
+    
+class WinternitzThresholdSignature:
+    def __init__(self, leaf_index, message, revealed, public_key, auth_path):
+        self.leaf_index = leaf_index
+        self.message = message
+        self.revealed = revealed
+        self.public_key = public_key
+        self.auth_path = auth_path
+
+class WinternitzThresholdHBSScheme(KOfNThresholdHBSScheme):
+    def __init__(self, parties, threshold_k, tree_height, w=16, approval_policies=None):
+        if w < 2:
+            raise ValueError("w must be at least 2")
+        
+        self.w = w
+        self.log_w = self.compute_log_w(w)
+
+        if self.log_w is None:
+            raise ValueError("this implementation supports w as a power of two")
+        
+        self.len1 = (256 + self.log_w - 1) // self.log_w
+        self.len2 = self.compute_len2(self.len1, w)
+        self.num_chains = self.len1 + self.len2
+        
+        super().__init__(parties, threshold_k, tree_height, approval_policies)
+
+    def compute_log_w(self, w):
+        value = w
+        power = 0
+
+        while value > 1:
+            if value % 2 != 0:
+                return None
+            value = value // 2
+            power += 1
+
+        return power
+    
+    def compute_len2(self, len1, w):
+        max_checksum = len1 * (w - 1)
+        length = 0
+        value = 1
+
+        while value <= max_checksum:
+            value *= w
+            length += 1
+
+        return length
+    
+    def hash_iter(self, data, count):
+        out = data
+        for i in range(count):
+            out = self.H(out)
+        return out
+    
+    def bytes_to_base_w(self, data, out_len):
+        digits = []
+        bit_buffer = 0
+        bit_count = 0
+        mask = self.w - 1
+
+        for b in data:
+            bit_buffer = (bit_buffer << 8) | b
+            bit_count += 8
+
+            while bit_count >= self.log_w and len(digits) < out_len:
+                shift = bit_count - self.log_w
+                digit = (bit_buffer >> shift) & mask
+                digits.append(digit)
+
+                bit_buffer = bit_buffer & ((1 << shift) - 1)
+                bit_count -= self.log_w
+
+        while len(digits) < out_len:
+            if bit_count > 0:
+                digit = (bit_buffer << (self.log_w - bit_count)) & mask
+                digits.append(digit)
+                bit_buffer = 0
+                bit_count = 0
+            else:
+                digits.append(0)
+
+        return digits
+    
+    def int_to_base_w(self, value, out_len):
+        digits = [0] * out_len
+        
+        for i in range(out_len - 1, -1, -1):
+            digits[i] = value % self.w
+            value = value // self.w
+
+        return digits
+    
+    def message_digits_with_checksum(self, message):
+        digest = self.H(message)
+        msg_digits = self.bytes_to_base_w(digest, self.len1)
+
+        checksum = 0
+        for d in msg_digits:
+            checksum += (self.w - 1 - d)
+
+        checksum_digits = self.int_to_base_w(checksum, self.len2)
+        return msg_digits + checksum_digits
+    
+    def generate_winternitz_keypair(self):
+        sk = []
+        pk = []
+
+        for i in range(self.num_chains):
+            x = self.randbytes(self.digest_size)
+            sk.append(x)
+            pk.append(self.hash_iter(x, self.w -1))
+
+        return sk, WinternitzPublicKey(pk)
+    
+    def dealer_setup(self):
+        self.leaf_secret_keys = []
+        self.leaf_public_keys = []
+
+        for i in range(self.num_leaves):
+            sk, pk = self.generate_winternitz_keypair()
+            self.leaf_secret_keys.append(sk)
+            self.leaf_public_keys.append(pk)
+
+        leaf_hashes = []
+        for pk in self.leaf_public_keys:
+            leaf_hashes.append(pk.leaf_hash(self))
+
+        self.merkle_levels = self.build_merkle_tree(leaf_hashes)
+        self.build_winternitz_threshold_shares()
+
+        self.public_bundle = PublicKeyBundle(merkle_root=self.get_merkle_root(), max_signatures=self.num_leaves, hash_name=self.hash_name, leaves=self.num_leaves,)
+
+    def build_winternitz_threshold_shares(self):
+        for leaf_index in range(len(self.leaf_secret_keys)):
+            winternitz_sk = self.leaf_secret_keys[leaf_index]
+
+            for pid in range(self.parties):
+                self.party_shares[pid][leaf_index] = {}
+
+            for chain_index in range(self.num_chains):
+                shares = self.shamir_share(
+                    winternitz_sk[chain_index],
+                    self.parties,
+                    self.threshold_k,
+                )
+
+                for pid in range(self.parties):
+                    self.party_shares[pid][leaf_index][chain_index] = shares[pid]
+
+    def party_produce_share(self, party_id, leaf_index, message):
+        if not self.approve(party_id, message):
+            raise PermissionError("party " + str(party_id) + " refused to sign")
+        
+        if party_id not in self.party_shares:
+            raise KeyError("unknown party id")
+        if leaf_index not in self.party_shares[party_id]:
+            raise IndexError("unknown leaf index")
+        
+        selected_shares = []
+
+        for chain_index in range(self.num_chains):
+            selected_shares.append(self.party_shares[party_id][leaf_index][chain_index])
+        
+        return ShareResponse(party_id=party_id, leaf_index=leaf_index, selected_shares=selected_shares,)
+    
+    def sign(self, message, leaf_index=None, active_party_ids=None):
+        if leaf_index is None:
+            leaf_index = self.next_unused_leaf()
+
+        if leaf_index is None:
+            raise RuntimeError("all Winternitz leaves are exhausted")
+        
+        if leaf_index in self.used_leaves:
+            raise RuntimeError("leaf already used; one-time key reuse is forbidden")
+        
+        if active_party_ids is None:
+            candidate_ids = []
+            for pid in range(self.parties):
+                candidate_ids.append(pid)
+        else:
+            candidate_ids = []
+            for pid in active_party_ids:
+                if pid < 0 or pid >= self.parties:
+                    raise ValueError("invalid party id in active_party_ids")
+                if pid not in candidate_ids:
+                    candidate_ids.append(pid)
+
+        share_responses = []
+
+        for pid in candidate_ids:
+            try:
+                resp = self.party_produce_share(pid, leaf_index, message)
+                share_responses.append(resp)
+            except PermissionError:
+                pass
+
+            if len(share_responses) == self.threshold_k:
+                break
+
+        if len(share_responses) < self.threshold_k:
+            raise PermissionError("fewer than k parties approved the message")
+        
+        chain_count = len(share_responses[0].selected_shares)
+
+        for resp in share_responses:
+            if resp.leaf_index != leaf_index:
+                raise ValueError("inconsistent leaf index in responses")
+            if len(resp.selected_shares) != chain_count:
+                raise ValueError("inconsistent share count in responses")
+            
+        digits = self.message_digits_with_checksum(message)
+        reconstructed_revealed = []
+
+        for chain_index in range(chain_count):
+            share_points = []
+            
+            for resp in share_responses:
+                x_coordinate = resp.party_id + 1
+                share_vector = resp.selected_shares[chain_index]
+                share_points.append((x_coordinate, share_vector))
+
+            secret_element = self.shamir_recombine(share_points)
+            signature_element = self.hash_iter(secret_element, digits[chain_index])
+            reconstructed_revealed.append(signature_element)
+
+        self.used_leaves.add(leaf_index)
+
+        return WinternitzThresholdSignature(leaf_index=leaf_index, message=message, revealed=reconstructed_revealed, public_key=self.leaf_public_keys[leaf_index], auth_path=self.get_auth_path(leaf_index),)
+    
+    def verify_winternitz_signature(self, message, revealed, public_key):
+        if len(revealed) != self.num_chains:
+            return False
+        
+        digits = self.message_digits_with_checksum(message)
+
+        for i in range(self.num_chains):
+            remaining = self.w - 1 - digits[i]
+            candidate = self.hash_iter(revealed[i], remaining)
+
+            if candidate != public_key.pub[i]:
+                return False
+            
+        return True
+    
+    def verify(self, signature):
+        ots_ok = self.verify_winternitz_signature(signature.message, signature.revealed, signature.public_key,)
+
+        if not ots_ok:
+            return False
+        
+        return self.verify_merkle_path(signature.public_key.leaf_hash(self), signature.auth_path, self.public_bundle.merkle_root,)
+    
+    def benchmark(self, rounds):
+        setup_times = []
+        sign_times = []
+        verify_times = []
+
+        for i in range(rounds):
+            message = ("benchmark-message-" + str(i)).encode()
+
+            t0 = time.perf_counter()
+            scheme = WinternitzThresholdHBSScheme(self.parties, self.threshold_k, self.tree_height, self.w,)
+            t1 = time.perf_counter()
+
+            sig = scheme.sign(message, active_party_ids=list(range(self.threshold_k)))
+            t2 = time.perf_counter()
+
+            ok = scheme.verify(sig)
+            t3 = time.perf_counter()
+
+            if not ok:
+                raise RuntimeError("Winternitz benchmark produced invalid signature")
+            
+            setup_times.append(t1 - t0)
+            sign_times.append(t2 - t1)
+            verify_times.append(t3 - t2)
+
+        return {
+            "parties":self.parties, 
+            "threshold_k": self.threshold_k, 
+            "tree_height": self.tree_height,
+            "w": self.w, 
+            "rounds": rounds, 
+            "setup_time": round(statistics.mean(setup_times), 8),
+            "sign_time": round(statistics.mean(sign_times), 8),
+            "verify_time": round(statistics.mean(verify_times), 8),
+        }
 
 
 
