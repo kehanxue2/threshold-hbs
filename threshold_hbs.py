@@ -842,6 +842,90 @@ class DistributedThresholdHBSScheme(KOfNThresholdHBSScheme):
             "verify_time": round(statistics.mean(verify_times), 8),
         }
 
+# Extension 3: batch signing
+# buffered signing
+class BatchedThresholdHBSScheme(KOfNThresholdHBSScheme):
+    def __init__(self, parties, threshold_k, tree_height, approval_policies=None):
+        super().__init__(parties, threshold_k, tree_height, approval_policies)
+
+    def sign_batch(self, messages, active_party_ids=None, start_leaf_index=None):
+        if messages is None or len(messages) == 0:
+            raise ValueError("messages must be a non-empty list")
+        
+        signatures = []
+
+        if start_leaf_index is None:
+            current_leaf = self.next_unused_leaf()
+        else:
+            current_leaf = start_leaf_index
+
+        if current_leaf is None:
+            raise RuntimeError("all Lamport leaves are exhausted")
+        
+        for message in messages:
+            if current_leaf is None:
+                raise RuntimeError("not enough remaining leaves for batch signing")
+            
+            sig = self.sign(message=message, leaf_index=current_leaf, active_party_ids=active_party_ids,)
+            signatures.append(sig)
+
+            current_leaf += 1
+            if current_leaf >= self.num_leaves:
+                current_leaf = None
+
+        return signatures
+    
+    def verify_batch(self, signatures):
+        results = []
+
+        for sig in signatures:
+            results.append(self.verify(sig))
+
+        return results
+    
+    def benchmark_batch(self, rounds, batch_size):
+        setup_times = []
+        batch_sign_times = []
+        verify_times = []
+
+        for i in range(rounds):
+            messages = []
+            for j in range(batch_size):
+                messages.append(("batch-message-" + str(i) + "-" + str(j)).encode())
+
+            t0 = time.perf_counter()
+            scheme = BatchedThresholdHBSScheme(self.parties, self.threshold_k, self.tree_height,)
+            t1 = time.perf_counter()
+
+            sigs = scheme.sign_batch(messages=messages, active_party_ids=list(range(self.threshold_k)))
+            t2 = time.perf_counter()
+
+            verify_ok = True
+            verify_results = scheme.verify_batch(sigs)
+            for item in verify_results:
+                if not item:
+                    verify_ok = False
+                    break
+            t3 = time.perf_counter()
+
+            if not verify_ok:
+                raise RuntimeError("batch benchmark produced invalid signature")
+            
+            setup_times.append(t1 - t0)
+            batch_sign_times.append(t2 - t1)
+            verify_times.append(t3 - t2)
+
+        return {
+            "parties":self.parties, 
+            "threshold_k": self.threshold_k, 
+            "tree_height": self.tree_height, 
+            "rounds":rounds, 
+            "batch_size": batch_size,
+            "setup_time": round(statistics.mean(setup_times), 8),
+            "batch_sign_time": round(statistics.mean(batch_sign_times), 8),
+            "verify_time": round(statistics.mean(verify_times), 8),
+            "avg_sign_time_per_message": round(statistics.mean(batch_sign_times) / batch_size, 8),
+        }
 
 
 

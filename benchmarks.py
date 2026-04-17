@@ -1,4 +1,4 @@
-from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme
+from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme, BatchedThresholdHBSScheme
 
 def main():
     print("-- Benchmark: Minimal Threshold HBS --")
@@ -28,6 +28,16 @@ def main():
     for parties, threshold_k, tree_height in ext_settings2:
         scheme = DistributedThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height)
         result = scheme.benchmark(rounds=5)
+        print(result)
+
+    print()
+    print("-- Benchmark: Extension 3 Batched Threshold HBS --")
+
+    ext_settings3 = [(4, 3, 4, 3), (5, 3, 4, 3), (5, 4, 4, 4),]
+
+    for parties, threshold_k, tree_height, batch_size in ext_settings3:
+        scheme = BatchedThresholdHBSScheme(parties=parties, threshold_k=threshold_k, tree_height=tree_height)
+        result = scheme.benchmark_batch(rounds=5, batch_size=batch_size)
         print(result)
 
 if __name__ == "__main__":

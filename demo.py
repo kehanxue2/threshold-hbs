@@ -1,4 +1,4 @@
-from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme
+from threshold_hbs import ThresholdHBSScheme, KOfNThresholdHBSScheme, DistributedThresholdHBSScheme, BatchedThresholdHBSScheme
 
 def main():
     mini_scheme = ThresholdHBSScheme(parties=4, tree_height=3)
@@ -40,6 +40,19 @@ def main():
     print("Leaf index used:", ext_signature2.leaf_index)
     print("Revealed elements:", len(ext_signature2.revealed))
     print("Verification result:", ext_scheme2.verify(ext_signature2))
+    print()
+
+    ext_scheme3 = BatchedThresholdHBSScheme(parties=4, threshold_k=3, tree_height=4)
+    batch_messages = [b"batch message 1", b"batch message 2", b"batch message 3",]
+    ext_signature3 = ext_scheme3.sign_batch(batch_messages, active_party_ids=[0, 1, 2])
+
+    print("-- Demo: Extension 3 (Batched Threshold HBS) --")
+    print("Parties:", ext_scheme3.parties)
+    print("Threshold k:", ext_scheme3.threshold_k)
+    print("Merkle root:", ext_scheme3.public_bundle.merkle_root.hex())
+    print("Max signatures:", ext_scheme3.public_bundle.max_signatures)
+    print("Batch size:", len(ext_signature3))
+    print("Verification results:", ext_scheme3.verify_batch(ext_signature3))
 
 if __name__ == "__main__":
     main()
