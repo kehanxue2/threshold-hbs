@@ -27,9 +27,10 @@ class HierarchicalMerklePath:
         self.subtree_index = subtree_index
 
 class ThresholdSignature:
-    def __init__(self, leaf_index, message, revealed, lamport_public_key, auth_path):
+    def __init__(self, leaf_index, message, randomizer, revealed, lamport_public_key, auth_path):
         self.leaf_index = leaf_index
         self.message = message
+        self.randomizer = randomizer
         self.revealed = revealed
         self.lamport_public_key = lamport_public_key
         self.auth_path = auth_path
@@ -144,6 +145,18 @@ class ThresholdHBSScheme:
                 bits.append((b >> shift) & 1)
         return bits
     
+    def randomized_message_digest(self, leaf_index, randomizer, message):
+        return self.h_tag(
+            b"lamport-msg",
+            leaf_index.to_bytes(4, "big"),
+            randomizer,
+            message,
+        )
+    
+    def randomized_message_bits(self, leaf_index, randomizer, message):
+        digest = self.randomized_message_digest(leaf_index, randomizer, message)
+        return self.bytes_to_bits(digest)
+    
     def dealer_setup(self):
         self.leaf_secret_keys = []
         self.leaf_public_keys = []
@@ -177,12 +190,12 @@ class ThresholdHBSScheme:
 
         return secrets_2d, LamportPublicKey(pub_2d)
     
-    def lamport_select_secret_elements(self, lamport_sk, message):
-        digest_bits = self.bytes_to_bits(self.H(message))
+    def lamport_select_secret_elements(self, lamport_sk, leaf_index, randomizer, message):
+        digest_bits = self.randomized_message_bits(leaf_index, randomizer, message)
         return [lamport_sk[bit][i] for i, bit in enumerate(digest_bits)]
     
-    def verify_lamport_signature(self, message, revealed, pk):
-        digest_bits = self.bytes_to_bits(self.H(message))
+    def verify_lamport_signature(self, leaf_index, randomizer, message, revealed, pk):
+        digest_bits = self.randomized_message_bits(leaf_index, randomizer, message)
 
         if len(revealed) != self.lamport_bits:
             return False
@@ -190,7 +203,7 @@ class ThresholdHBSScheme:
         for i, bit in enumerate(digest_bits):
             if self.H(revealed[i]) != pk.pub[bit][i]:
                 return False
-            
+                
         return True
     
     def xor_share(self, secret, n):
@@ -287,7 +300,7 @@ class ThresholdHBSScheme:
     def approve(self, party_id, message):
         return bool(self.approval_policies[party_id](message))
     
-    def party_produce_share(self, party_id, leaf_index, message):
+    def party_produce_share(self, party_id, leaf_index, randomizer, message):
         if not self.approve(party_id, message):
             raise PermissionError("party " + str(party_id) + " refused to sign")
         
@@ -296,14 +309,18 @@ class ThresholdHBSScheme:
         if leaf_index not in self.party_shares[party_id]:
             raise IndexError("unknown leaf index")
         
-        bits = self.bytes_to_bits(self.H(message))
+        bits = self.randomized_message_bits(leaf_index, randomizer, message)
         selected_shares = []
 
         for bit_index in range(len(bits)):
             bit = bits[bit_index]
             selected_shares.append(self.party_shares[party_id][leaf_index][bit_index][bit])
 
-        return ShareResponse(party_id=party_id, leaf_index=leaf_index, selected_shares=selected_shares,)
+        return ShareResponse(
+            party_id=party_id,
+            leaf_index=leaf_index,
+            selected_shares=selected_shares,
+        )
     
     def next_unused_leaf(self):
         for i in range(self.num_leaves):
@@ -321,9 +338,11 @@ class ThresholdHBSScheme:
         if leaf_index in self.used_leaves:
             raise RuntimeError("leaf already used; one-time key reuse is forbidden")
         
+        randomizer = self.randbytes(self.digest_size)
+        
         share_responses = []
         for pid in range(self.parties):
-            share_responses.append(self.party_produce_share(pid, leaf_index, message))
+            share_responses.append(self.party_produce_share(pid, leaf_index, randomizer, message))
         
         bit_count = len(share_responses[0].selected_shares)
 
@@ -343,17 +362,35 @@ class ThresholdHBSScheme:
 
         self.used_leaves.add(leaf_index)
 
-        return ThresholdSignature(leaf_index=leaf_index, message=message, revealed=reconstructed_revealed, lamport_public_key=self.leaf_public_keys[leaf_index], auth_path=self.get_auth_path(leaf_index))
+        return ThresholdSignature(
+            leaf_index=leaf_index,
+            message=message,
+            randomizer=randomizer,
+            revealed=reconstructed_revealed,
+            lamport_public_key=self.leaf_public_keys[leaf_index],
+            auth_path=self.get_auth_path(leaf_index),
+        )
     
     def verify(self, signature, message=None, public_bundle=None):
         message = signature.message if message is None else message
         public_bundle = self.public_bundle if public_bundle is None else public_bundle
-        lamport_ok = self.verify_lamport_signature(message, signature.revealed, signature.lamport_public_key,)
+
+        lamport_ok = self.verify_lamport_signature(
+            signature.leaf_index,
+            signature.randomizer,
+            message,
+            signature.revealed,
+            signature.lamport_public_key,
+        )
 
         if not lamport_ok:
             return False
-        
-        return self.verify_merkle_path(signature.lamport_public_key.leaf_hash(self), signature.auth_path, public_bundle.merkle_root,)
+            
+        return self.verify_merkle_path(
+            signature.lamport_public_key.leaf_hash(self),
+            signature.auth_path,
+            public_bundle.merkle_root,
+        )
        
     def benchmark(self, rounds):
         setup_times = []
@@ -478,11 +515,11 @@ class KOfNThresholdHBSScheme(ThresholdHBSScheme):
                 return leaf_index
         return None
 
-    def party_produce_share(self, party_id, leaf_index, message):
+    def party_produce_share(self, party_id, leaf_index, randomizer, message):
         subset = self.leaf_to_subset[leaf_index]
         if party_id not in subset:
             raise PermissionError("party is not a member of the selected k-of-k subtree")
-        return super().party_produce_share(party_id, leaf_index, message,)
+        return super().party_produce_share(party_id, leaf_index, randomizer, message)
     
     def sign(self, message, leaf_index=None, active_party_ids=None):
         subset = self.normalise_subset(active_party_ids)
@@ -497,20 +534,28 @@ class KOfNThresholdHBSScheme(ThresholdHBSScheme):
         if leaf_index in self.used_leaves:
             raise RuntimeError("leaf already used; one-time key reuse is forbidden")
 
+        randomizer = self.randbytes(self.digest_size)
+
         share_responses = []
         for pid in subset:
-            resp = self.party_produce_share(pid, leaf_index, message)
+            resp = self.party_produce_share(pid, leaf_index, randomizer, message)
             share_responses.append(resp)
-            
-        reconstructed_revealed = []
 
+        reconstructed_revealed = []
         for bit_index in range(len(share_responses[0].selected_shares)):
             position_shares = [resp.selected_shares[bit_index] for resp in share_responses]
             reconstructed_revealed.append(self.xor_recombine(position_shares))
 
         self.used_leaves.add(leaf_index)
 
-        return ThresholdSignature(leaf_index=leaf_index, message=message, revealed=reconstructed_revealed, lamport_public_key=self.leaf_public_keys[leaf_index], auth_path=self.get_auth_path(leaf_index),)
+        return ThresholdSignature(
+            leaf_index=leaf_index,
+            message=message,
+            randomizer=randomizer,
+            revealed=reconstructed_revealed,
+            lamport_public_key=self.leaf_public_keys[leaf_index],
+            auth_path=self.get_auth_path(leaf_index),
+        )
     
     def benchmark(self, rounds):
         setup_times = []
