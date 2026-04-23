@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560">
+<rect width="100%" height="100%" fill="#f7f4ee"/>
+<text x="120" y="42" font-size="24" font-family="Arial, sans-serif" fill="#1c1c1c">Average sign time per message (s)</text>
+<text x="120" y="66" font-size="12" font-family="Arial, sans-serif" fill="#555">Generated from benchmark_results.csv</text>
+<line x1="120" y1="450" x2="940" y2="450" stroke="#222" stroke-width="1.5"/>
+<line x1="120" y1="80" x2="120" y2="450" stroke="#222" stroke-width="1.5"/>
+<line x1="114" y1="450.00" x2="940" y2="450.00" stroke="#d8d1c4" stroke-width="1"/>
+<text x="108" y="454.00" text-anchor="end" font-size="11" font-family="Arial, sans-serif" fill="#444">0.000000</text>
+<line x1="114" y1="376.00" x2="940" y2="376.00" stroke="#d8d1c4" stroke-width="1"/>
+<text x="108" y="380.00" text-anchor="end" font-size="11" font-family="Arial, sans-serif" fill="#444">0.000607</text>
+<line x1="114" y1="302.00" x2="940" y2="302.00" stroke="#d8d1c4" stroke-width="1"/>
+<text x="108" y="306.00" text-anchor="end" font-size="11" font-family="Arial, sans-serif" fill="#444">0.001214</text>
+<line x1="114" y1="228.00" x2="940" y2="228.00" stroke="#d8d1c4" stroke-width="1"/>
+<text x="108" y="232.00" text-anchor="end" font-size="11" font-family="Arial, sans-serif" fill="#444">0.001821</text>
+<line x1="114" y1="154.00" x2="940" y2="154.00" stroke="#d8d1c4" stroke-width="1"/>
+<text x="108" y="158.00" text-anchor="end" font-size="11" font-family="Arial, sans-serif" fill="#444">0.002428</text>
+<line x1="114" y1="80.00" x2="940" y2="80.00" stroke="#d8d1c4" stroke-width="1"/>
+<text x="108" y="84.00" text-anchor="end" font-size="11" font-family="Arial, sans-serif" fill="#444">0.003035</text>
+<rect x="145.97" y="80.00" width="84.73" height="370.00" rx="6" fill="#1f4e79"/>
+<text x="188.33" y="72.00" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#222">0.003035</text>
+<text x="188.33" y="472.00" text-anchor="end" transform="rotate(-28 188.33 472.00)" font-size="12" font-family="Arial, sans-serif" fill="#222">Ext2 distributed</text>
+<rect x="282.63" y="245.46" width="84.73" height="204.54" rx="6" fill="#2e8b57"/>
+<text x="325.00" y="237.46" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#222">0.001678</text>
+<text x="325.00" y="472.00" text-anchor="end" transform="rotate(-28 325.00 472.00)" font-size="12" font-family="Arial, sans-serif" fill="#222">Ext5 Winternitz</text>
+<rect x="419.30" y="245.81" width="84.73" height="204.19" rx="6" fill="#c26d00"/>
+<text x="461.67" y="237.81" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#222">0.001675</text>
+<text x="461.67" y="472.00" text-anchor="end" transform="rotate(-28 461.67 472.00)" font-size="12" font-family="Arial, sans-serif" fill="#222">Minimal</text>
+<rect x="555.97" y="305.02" width="84.73" height="144.98" rx="6" fill="#8b3a3a"/>
+<text x="598.33" y="297.02" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#222">0.001189</text>
+<text x="598.33" y="472.00" text-anchor="end" transform="rotate(-28 598.33 472.00)" font-size="12" font-family="Arial, sans-serif" fill="#222">Ext4 hierarchical</text>
+<rect x="692.63" y="310.74" width="84.73" height="139.26" rx="6" fill="#5b4b8a"/>
+<text x="735.00" y="302.74" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#222">0.001142</text>
+<text x="735.00" y="472.00" text-anchor="end" transform="rotate(-28 735.00 472.00)" font-size="12" font-family="Arial, sans-serif" fill="#222">Ext1 k-of-n</text>
+<rect x="829.30" y="323.57" width="84.73" height="126.43" rx="6" fill="#4a6a6d"/>
+<text x="871.67" y="315.57" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#222">0.001037</text>
+<text x="871.67" y="472.00" text-anchor="end" transform="rotate(-28 871.67 472.00)" font-size="12" font-family="Arial, sans-serif" fill="#222">Ext3 batched</text>
+</svg>
